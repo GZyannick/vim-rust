@@ -33,7 +33,7 @@ fn leave_raw_mode(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result<(
 }
 
 #[derive(Debug)]
-enum Modes {
+pub enum Modes {
     Normal,
     Visual,
     Insert,
@@ -41,7 +41,7 @@ enum Modes {
 }
 
 #[derive(Debug)]
-enum CurrentScreen {
+pub enum CurrentScreen {
     File,
     Explorer,
     Empty,
@@ -58,7 +58,7 @@ pub struct App {
 
 impl App {
     pub fn new() -> Result<App, Box<dyn Error>> {
-        let (path, screen, lines) = App::get_path_data()?;
+        let (path, screen, lines) = App::get_path_data(std::env::args().nth(1))?;
         Ok(App {
             modes: Modes::Normal,
             current_screen: screen,
@@ -68,14 +68,15 @@ impl App {
         })
     }
 
-    fn get_path_data() -> Result<(PathBuf, CurrentScreen, Vec<String>), Box<dyn Error>> {
-        let path_info: (PathBuf, CurrentScreen, Vec<String>) = match std::env::args().nth(1) {
+    fn get_path_data(
+        path: Option<String>,
+    ) -> Result<(PathBuf, CurrentScreen, Vec<String>), Box<dyn Error>> {
+        let path_info: (PathBuf, CurrentScreen, Vec<String>) = match path {
             Some(path) => {
                 let path = PathBuf::from(path);
                 if path.is_dir() {
                     let mut lines: Vec<String> = Vec::from(["../".into()]);
-                    let entries = fs::read_dir(path.clone())?;
-                    for entry in entries {
+                    for entry in path.read_dir()? {
                         let path = entry?.path();
                         lines.push(path.to_str().unwrap().into());
                     }
@@ -91,7 +92,16 @@ impl App {
         Ok(path_info)
     }
 
-    pub fn run<b: Backend>(&mut self, terminal: &mut Terminal<b>) -> Result<(), Box<dyn Error>> {
+    fn handle_new_path(&mut self, path: Option<String>) -> Result<(), Box<dyn Error>> {
+        let (path, screen, lines) = App::get_path_data(path)?;
+        self.path = path;
+        self.lines = lines;
+        self.current_screen = screen;
+        self.cursor = (0, 0);
+        Ok(())
+    }
+
+    pub fn run<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<(), Box<dyn Error>> {
         loop {
             terminal.draw(|frame| {
                 match self.current_screen {
@@ -119,8 +129,10 @@ impl App {
 
                 if let CurrentScreen::Explorer = self.current_screen {
                     match key.code {
-                        KeyCode::Enter => {} //TODO OPEN FILE OR DIR
-
+                        KeyCode::Enter => {
+                            let path = self.lines.iter().nth(self.cursor.1 as usize);
+                            self.handle_new_path(path.cloned())?;
+                        }
                         KeyCode::Right | KeyCode::Char('h') => {
                             if self.cursor.0 > 0 {
                                 self.cursor.0 -= 1;

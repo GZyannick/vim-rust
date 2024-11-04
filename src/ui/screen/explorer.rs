@@ -17,12 +17,11 @@ pub struct Explorer;
 impl Explorer {
     pub fn new(app: &mut App, frame: &mut Frame) {
         //TODO ADD LINE NUMBER SYSTEM
-        //BLINK CURSOR
         let mut text: Vec<Line> = vec![];
         for line in &app.lines {
             let line = match line.eq("../") {
-                true => line.to_string(),
-                false => line.replace("./", ""),
+                true => line,
+                false => line.split("/").last().unwrap(),
             };
             text.push(Line::from(Span::styled(line, Style::default())));
         }
