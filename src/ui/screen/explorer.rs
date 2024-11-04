@@ -18,11 +18,11 @@ impl Explorer {
     pub fn new(app: &mut App, frame: &mut Frame) {
         //TODO ADD LINE NUMBER SYSTEM
         let mut text: Vec<Line> = vec![];
-        for line in &app.lines {
-            let line = match line.eq("../") {
-                true => line,
-                false => line.split("/").last().unwrap(),
-            };
+        for (line, _) in &app.lines {
+            //let line = match line.eq("../") {
+            //    true => line,
+            //    false => line.split("/").last().unwrap(),
+            //};
             text.push(Line::from(Span::styled(line, Style::default())));
         }
         let paragraph = Paragraph::new(text);

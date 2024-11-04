@@ -10,6 +10,7 @@ use crossterm::{
 use ratatui::{
     self,
     prelude::{Backend, CrosstermBackend},
+    symbols::line,
     Terminal,
 };
 
@@ -52,13 +53,19 @@ pub struct App {
     pub modes: Modes,
     pub current_screen: CurrentScreen,
     pub path: PathBuf,
-    pub lines: Vec<String>,
+    pub lines: Vec<(String, PathBuf)>,
     pub cursor: (u16, u16),
 }
 
 impl App {
     pub fn new() -> Result<App, Box<dyn Error>> {
-        let (path, screen, lines) = App::get_path_data(std::env::args().nth(1))?;
+        let (path, screen, lines) = match std::env::args().nth(1) {
+            Some(path) => {
+                let path = PathBuf::from(path);
+                App::get_path_data(path)?
+            }
+            None => (std::env::current_dir()?, CurrentScreen::Empty, Vec::new()),
+        };
         Ok(App {
             modes: Modes::Normal,
             current_screen: screen,
@@ -69,31 +76,35 @@ impl App {
     }
 
     fn get_path_data(
-        path: Option<String>,
-    ) -> Result<(PathBuf, CurrentScreen, Vec<String>), Box<dyn Error>> {
-        let path_info: (PathBuf, CurrentScreen, Vec<String>) = match path {
-            Some(path) => {
-                let path = PathBuf::from(path);
-                if path.is_dir() {
-                    let mut lines: Vec<String> = Vec::from(["../".into()]);
-                    for entry in path.read_dir()? {
-                        let path = entry?.path();
-                        lines.push(path.to_str().unwrap().into());
-                    }
-                    (path, CurrentScreen::Explorer, lines)
-                } else if path.is_file() {
-                    (path, CurrentScreen::File, Vec::new())
-                } else {
-                    (path, CurrentScreen::Empty, Vec::new())
-                }
+        path: PathBuf,
+    ) -> Result<(PathBuf, CurrentScreen, Vec<(String, PathBuf)>), Box<dyn Error>> {
+        //TODO transform vec of string and pathbuf to enum to handle it in file tooo
+        let mut lines: Vec<(String, PathBuf)> = vec![];
+        if path.is_dir() {
+            if let Some(parent) = path.parent() {
+                lines.push(("../".to_string(), PathBuf::from(parent)));
             }
-            None => (std::env::current_dir()?, CurrentScreen::Empty, Vec::new()),
-        };
-        Ok(path_info)
+            for entry in path.read_dir()? {
+                let path = entry?.path();
+                let mut line = path.to_str().unwrap().to_string();
+                match line.split("/").last() {
+                    Some(str) => line = format!("./{str}"),
+                    None => {}
+                };
+
+                lines.push((line, path));
+            }
+
+            return Ok((path, CurrentScreen::Explorer, lines));
+        } else if path.is_file() {
+            return Ok((path, CurrentScreen::File, lines));
+        } else {
+            return Ok((path, CurrentScreen::Empty, vec![]));
+        }
     }
 
-    fn handle_new_path(&mut self, path: Option<String>) -> Result<(), Box<dyn Error>> {
-        let (path, screen, lines) = App::get_path_data(path)?;
+    fn handle_new_path(&mut self, path: Option<(String, PathBuf)>) -> Result<(), Box<dyn Error>> {
+        let (path, screen, lines) = App::get_path_data(path.unwrap().1)?;
         self.path = path;
         self.lines = lines;
         self.current_screen = screen;
@@ -122,7 +133,7 @@ impl App {
                 if key.kind == event::KeyEventKind::Release {
                     continue;
                 }
-                //DEV PURPOSE : q to leave
+                //DEV PURPOSE: q to leave
                 if key.code == KeyCode::Char('q') {
                     return Ok(());
                 }
