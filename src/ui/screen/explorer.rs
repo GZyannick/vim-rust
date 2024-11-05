@@ -1,5 +1,4 @@
 use ratatui::{
-    layout::Position,
     style::Style,
     text::{Line, Span},
     widgets::Paragraph,
@@ -15,7 +14,7 @@ use crate::App;
 pub struct Explorer;
 
 impl Explorer {
-    pub fn new(app: &mut App, frame: &mut Frame) {
+    pub fn render(app: &mut App, frame: &mut Frame) {
         //TODO ADD LINE NUMBER SYSTEM
         let mut text: Vec<Line> = vec![];
         for (line, _) in &app.lines {
@@ -27,6 +26,5 @@ impl Explorer {
         }
         let paragraph = Paragraph::new(text);
         frame.render_widget(paragraph, frame.area());
-        frame.set_cursor_position(Position::new(app.cursor.0, app.cursor.1));
     }
 }

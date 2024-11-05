@@ -1,6 +1,6 @@
 use std::{error::Error, fs, io::Stdout, path::PathBuf, u16, usize};
 mod ui;
-use ui::screen::explorer::Explorer;
+use ui::screen::{editor::Editor, explorer::Explorer};
 
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent},
@@ -9,6 +9,7 @@ use crossterm::{
 };
 use ratatui::{
     self,
+    layout::Position,
     prelude::{Backend, CrosstermBackend},
     symbols::line,
     Terminal,
@@ -43,7 +44,7 @@ pub enum Modes {
 
 #[derive(Debug)]
 pub enum CurrentScreen {
-    File,
+    Editor,
     Explorer,
     Empty,
 }
@@ -97,7 +98,7 @@ impl App {
 
             return Ok((path, CurrentScreen::Explorer, lines));
         } else if path.is_file() {
-            return Ok((path, CurrentScreen::File, lines));
+            return Ok((path, CurrentScreen::Editor, lines));
         } else {
             return Ok((path, CurrentScreen::Empty, vec![]));
         }
@@ -120,14 +121,17 @@ impl App {
                         //ui::screen::empty::Empty::new(frame, self);
                         todo!()
                     }
-                    CurrentScreen::File => {
-                        //ui::screen::empty::Empty::new(frame, self);
-                        todo!()
-                    }
+                    CurrentScreen::Editor => match Editor::render(self, frame) {
+                        Ok(_) => {}
+                        Err(e) => {
+                            eprintln!("{e}");
+                        }
+                    },
                     CurrentScreen::Explorer => {
-                        Explorer::new(self, frame);
+                        Explorer::render(self, frame);
                     }
                 }
+                frame.set_cursor_position(Position::new(self.cursor.0, self.cursor.1));
             })?;
             if let Event::Key(key) = event::read()? {
                 if key.kind == event::KeyEventKind::Release {
