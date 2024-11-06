@@ -37,7 +37,3 @@ fn main() -> Result<(), Box<dyn Error>> {
     leave_raw_mode(&mut terminal)?;
     Ok(())
 }
-
-// TODO
-// handle args
-//  create file, empty, explorer
