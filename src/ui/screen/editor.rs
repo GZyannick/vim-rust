@@ -1,4 +1,4 @@
-use std::{error::Error, fs::File, io::Read};
+use std::error::Error;
 
 use ratatui::{
     style::Style,

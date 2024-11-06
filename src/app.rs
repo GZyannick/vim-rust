@@ -8,11 +8,12 @@ use std::{
 
 use crate::{
     core::{AppKeyHandler, AppLines, CurrentScreen, LineLen, Modes, VimCursor},
-    ui::screen::{editor::Editor, explorer::Explorer},
+    ui::screen::{command::Command, editor::Editor, explorer::Explorer},
 };
 
 #[derive(Debug)]
 pub struct App {
+    pub command_input: String,
     pub modes: Modes,
     pub current_screen: CurrentScreen,
     pub path: PathBuf,
@@ -30,6 +31,7 @@ impl App {
             None => (std::env::current_dir()?, CurrentScreen::Empty, Vec::new()),
         };
         Ok(App {
+            command_input: String::new(),
             modes: Modes::Normal,
             current_screen: screen,
             cursor: VimCursor::new(),
@@ -100,8 +102,7 @@ impl App {
             terminal.draw(|frame| {
                 match self.current_screen {
                     CurrentScreen::Empty => {
-                        //ui::screen::empty::Empty::new(frame, self);
-                        todo!()
+                        todo!() // TODO Create a empty file and print it
                     }
                     CurrentScreen::Editor => match Editor::render(self, frame) {
                         Ok(_) => {}
@@ -112,6 +113,13 @@ impl App {
                     CurrentScreen::Explorer => {
                         Explorer::render(self, frame);
                     }
+                }
+
+                match self.modes {
+                    Modes::Command => {
+                        Command::new(frame, self);
+                    }
+                    _ => (), //TODO See what to show on other modes
                 }
                 frame.set_cursor_position(Position::new(self.cursor.x, self.cursor.y));
             })?;
