@@ -1,3 +1,5 @@
+use crossterm::event::KeyCode;
+
 #[derive(Debug)]
 pub enum Modes {
     Normal,

@@ -1,39 +1,137 @@
-use std::{error::Error, u16, usize};
-
+use super::{CurrentScreen, Modes};
+use crate::app::App;
 use crossterm::event::{self, Event, KeyCode};
-
-use crate::{app::App, ui::screen::command};
-
-use super::{CurrentScreen, LineLen, Modes};
+use std::error::Error;
 
 pub struct AppKeyHandler {
     pub buffered_input: Option<KeyCode>,
 }
 
-//TODO Handle vim key,
-//Handle buffered_input
-//
 //-> Result<(), Box<dyn Error>>
+
+// !!! TODO LIST !!!
+//  Handle specific command in normal, insert, command, visual
+//  Ajouter un buffer de la derniere touche appuyer pour handle
+//  find a way to handle general behavior like moving in each modes
+//  Error! the movement key can crash because the cursor go more line than possible
+
 impl AppKeyHandler {
     pub fn new() -> Self {
         Self {
             buffered_input: None,
         }
     }
+
     pub fn handle(&mut self, app: &mut App) -> Result<bool, Box<dyn Error>> {
         if let Event::Key(key) = event::read()? {
             if key.kind == event::KeyEventKind::Release {
                 return Ok(false);
             }
+            match app.modes {
+                // handle ESC here because it will be on each Modes
+                Modes::Visual | Modes::Insert | Modes::Command if key.code == KeyCode::Esc => {
+                    app.modes = Modes::Normal;
+                    if app.command_input.len() > 0 {
+                        app.command_input = String::new();
+                    }
+                }
 
-            // break if user do :q
-            if self.handle_navigation(app, key.code) {
-                return Ok(true);
+                Modes::Visual | Modes::Normal if key.code == KeyCode::Char(':') => {
+                    app.modes = Modes::Command;
+                }
+                Modes::Normal => self.handle_normal(key.code, app),
+                Modes::Visual => self.handle_visual(key.code, app),
+                Modes::Insert => self.handle_insert(key.code, app),
+                Modes::Command => {
+                    let is_quit = self.handle_command(key.code, app);
+                    if is_quit {
+                        return Ok(is_quit);
+                    }
+                }
+            };
+            if app.modes != Modes::Command {
+                self.handle_screen(app, key.code)?;
             }
-            self.handle_screen(app, key.code)?;
             self.buffer_input(key.code)
         }
         Ok(false)
+    }
+
+    fn handle_normal(&mut self, key: KeyCode, app: &mut App) {
+        self.hjkl_navigation(app, key);
+        //self.arrows_navigation(app, key);
+        //match key {
+        //    _ => {}
+        //}
+    }
+
+    fn handle_insert(&mut self, key: KeyCode, app: &mut App) {
+        self.arrows_navigation(app, key);
+        //match key {
+        //    _ => {}
+        //}
+    }
+    fn handle_visual(&mut self, key: KeyCode, app: &mut App) {
+        self.hjkl_navigation(app, key);
+        //self.arrows_navigation(app, key);
+        //match key {
+        //    _ => {}
+        //}
+    }
+
+    fn handle_command(&mut self, key: KeyCode, app: &mut App) -> bool {
+        match key {
+            KeyCode::Char(char) => {
+                app.command_input.push(char);
+            }
+            KeyCode::Backspace => {
+                if app.command_input.len() == 0 {
+                    app.modes = Modes::Normal;
+                } else {
+                    app.command_input.pop().unwrap();
+                }
+            }
+            KeyCode::Enter => {
+                let is_break = self.command_result(&app.command_input);
+                app.command_input = String::new();
+                return is_break;
+            }
+            _ => {}
+        }
+        false
+    }
+
+    fn hjkl_navigation(&self, app: &mut App, key: KeyCode) {
+        // TODO! Error cursor can go more than the number of line and crash the app
+        match key {
+            KeyCode::Char('k') => {
+                app.cursor.up();
+                app.cursor.handle_max_width(app.get_line_len());
+            }
+            KeyCode::Char('j') => {
+                app.cursor.down(app.lines.len());
+                app.cursor.handle_max_width(app.get_line_len());
+            }
+            KeyCode::Char('h') => app.cursor.left(),
+            KeyCode::Char('l') => app.cursor.right(app.get_line_len()),
+            _ => {}
+        }
+    }
+
+    fn arrows_navigation(&self, app: &mut App, key: KeyCode) {
+        match key {
+            KeyCode::Up => {
+                app.cursor.up();
+                app.cursor.handle_max_width(app.get_line_len());
+            }
+            KeyCode::Down => {
+                app.cursor.down(app.lines.len());
+                app.cursor.handle_max_width(app.get_line_len());
+            }
+            KeyCode::Left => app.cursor.left(),
+            KeyCode::Right => app.cursor.right(app.get_line_len()),
+            _ => {}
+        }
     }
 
     fn handle_screen(&self, app: &mut App, key: KeyCode) -> Result<(), Box<dyn Error>> {
@@ -51,62 +149,11 @@ impl AppKeyHandler {
         Ok(())
     }
 
-    fn handle_navigation(&self, app: &mut App, key: KeyCode) -> bool {
-        match app.modes {
-            Modes::Normal | Modes::Visual => match key {
-                // TODO! when up and down move the cursor.x to its max width if x > max_width
-                KeyCode::Esc => app.modes = Modes::Normal,
-                KeyCode::Char(':') => {
-                    app.modes = Modes::Command;
-                }
-                KeyCode::Up | KeyCode::Char('k') => {
-                    app.cursor.up();
-                    app.cursor.handle_max_width(app.get_line_len());
-                }
-                KeyCode::Down | KeyCode::Char('j') => {
-                    app.cursor.down(app.lines.len());
-                    app.cursor.handle_max_width(app.get_line_len());
-                }
-                KeyCode::Left | KeyCode::Char('h') => app.cursor.left(),
-                KeyCode::Right | KeyCode::Char('l') => app.cursor.right(app.get_line_len()),
-                _ => {}
-            },
-            Modes::Insert => match key {
-                KeyCode::Esc => app.modes = Modes::Normal,
-                _ => {}
-            },
-            Modes::Command => match key {
-                KeyCode::Esc => {
-                    app.modes = Modes::Normal;
-                    app.command_input = String::new();
-                }
-                KeyCode::Char(char) => {
-                    app.command_input.push(char);
-                }
-                KeyCode::Backspace => {
-                    if app.command_input.len() == 0 {
-                        app.modes = Modes::Normal;
-                    } else {
-                        app.command_input.pop().unwrap();
-                    }
-                }
-                KeyCode::Enter => {
-                    let is_break = self.handle_command_result(&app.command_input);
-                    app.command_input = String::new();
-                    return is_break;
-                }
-                _ => {}
-            },
-        }
-        // to know if we need to break the loop
-        false
-    }
-
     fn buffer_input(&mut self, input: KeyCode) {
         self.buffered_input = Some(input);
     }
 
-    fn handle_command_result(&self, command: &str) -> bool {
+    fn command_result(&self, command: &str) -> bool {
         match command {
             "q" => return true,
             _ => {}
@@ -131,7 +178,6 @@ impl AppKeyHandler {
 //
 //                if let Modes::Normal = self.modes {
 //match key.code {
-//TODO! Ajouter un buffer de la derniere touche appuyer pour handle
 //                        //les commandes types gg
 //                        //
 //                        //
